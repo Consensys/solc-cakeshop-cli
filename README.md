@@ -8,7 +8,7 @@ It is meant as a simple replacement for the C++ `solc` program, to be called by 
 ## Installation
 solc-cakeshop-cli can be easily installed via the following package managers:
 
-* [npm](https://www.npmjs.com/package/epoch-charting)
+* [npm](https://www.npmjs.com/package/solc-cakeshop-cli)
 
 
 ## License
