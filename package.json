@@ -1,5 +1,5 @@
 {
-  "name": "solc-cli",
+  "name": "solc-cakeshop-cli",
   "version": "0.3.3",
   "description": "Solidity compiler CLI tool",
   "scripts": {
@@ -28,7 +28,7 @@
     "body-parser": "^1.15.2",
     "commander": "^2.9.0",
     "express": "^4.14.0",
-    "solc": "^0.3.1-1",
+    "solc": "0.4.11",
     "underscore": "^1.8.3"
   }
 }
