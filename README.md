@@ -1,9 +1,15 @@
 
-# solc-cli
+# solc-cakeshop-cli
 
 An API-compatible implementation of the solc CLI program using pure JS.
 
 It is meant as a simple replacement for the C++ `solc` program, to be called by geth via the `eth_compileSolidity` RPC method.
+
+## Installation
+solc-cakeshop-cli can be easily installed via the following package managers:
+
+* [npm](https://www.npmjs.com/package/epoch-charting)
+
 
 ## License
 
