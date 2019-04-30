@@ -1,6 +1,6 @@
 {
   "name": "solc-cakeshop-cli",
-  "version": "0.3.5",
+  "version": "0.4.0",
   "description": "Solidity compiler CLI tool",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/chetan/solc-cli.git"
+    "url": "git+https://github.com/jpmorganchase/solc-cakeshop-cli"
   },
   "keywords": [
     "ethereum",
@@ -20,15 +20,15 @@
   "author": "Chetan Sarva",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/chetan/solc-cli/issues"
+    "url": "https://github.com/jpmorganchase/solc-cakeshop-cli/issues"
   },
-  "homepage": "https://github.com/chetan/solc-cli/#readme",
+  "homepage": "https://github.com/jpmorganchase/solc-cakeshop-cli/#readme",
   "dependencies": {
     "bluebird": "3.4.6",
-    "body-parser": "1.15.2",
+    "body-parser": "^1.19.0",
     "commander": "2.9.0",
-    "express": "4.14.0",
-    "solc": "0.4.11",
+    "express": "^4.16.4",
+    "solc": "^0.5.7",
     "underscore": "1.8.3"
   }
 }

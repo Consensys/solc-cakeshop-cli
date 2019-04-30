@@ -22,10 +22,12 @@ function processArgs() {
     })
     .usage("[options] [input_file...]")
 
+    .option("--filename [filename]", "If using STDIN to pass in the solidity file, include a file name.")
     .option("-o, --output-dir [path]", "If given, creates one file per component contract/file at the specified directory.")
     .option("--combined-json [components...]", "Output a single json file containing the selected components. Supported components: abi,bin,devdoc,interface,hashes,userdoc,gas")
     .option("--optimize", "Enable bytecode optimizer.")
     .option("--add-std", "Add standard contracts (currently ignored)")
+    .option("--evm-version [version]", "evm version to use (byzantium, constantinople, petersburg, etc)")
 
     .option("--spawn-ipc", "Spawn IPC server daemon")
     .option("--stop-ipc", "Stop the IPC server daemon")
@@ -59,7 +61,16 @@ function runServer() {
   app.use(require('body-parser').text());
 
   app.post('/compile', function (req, res, next) {
-    res.send(JSON.stringify(compileSource(req.body)));
+    if(req.query.filename === null) {
+      throw new Error("If using the REST endpoint, please pass in a filename query param: (e.g. /compile?filename=xxxxxx.sol )")
+    }
+    Object.assign(program, {
+      filename: req.query.filename,
+      evmVersion: req.query.evmVersion,
+      optimize: !!req.query.optimize,
+    }
+  );
+    res.send(JSON.stringify(compileSource(req.body, req.query.filename)));
   });
 
   app.post('/shutdown', function(req, res) {
@@ -77,9 +88,9 @@ function ipcReq(path, cb) {
   return http.request({host: "127.0.0.1", port: 8989, method: "POST", path: path}, cb);
 }
 
-function compileIpc(source) {
+function compileIpc(source, filename) {
   return new Promise(function(resolve, reject) {
-    var req = ipcReq("/compile",
+    var req = ipcReq("/compile?filename=" + filename + "&optimize=" + !!program.optimize + "&evmVersion=" + program.evmVersion,
       function(res) {
         var buff = "";
         res.on("data", function(chunk) { buff += chunk; });
@@ -120,8 +131,8 @@ function main() {
   if (!program.args || program.args.length === 0) {
     processStdin();
   } else {
-    program.args.forEach(function(file) {
-      compileSource(readFile(file));
+    program.args.forEach(function(filename) {
+      compileSource(readFile(filename), filename);
     });
   }
 }
@@ -129,8 +140,8 @@ function main() {
 var ipc_errors = 0;
 function processIpc() {
 
-  var try_compile = function(source) {
-    compileIpc(source).then(function(res) {
+  var try_compile = function(source, filename) {
+    compileIpc(source, filename).then(function(res) {
       process.stdout.write(JSON.stringify(res));
       process.exit(0); // only support a single file for IPC for now
     }).catch(function(e) {
@@ -150,13 +161,16 @@ function processIpc() {
   };
 
   if (program.args.length > 0 ) {
-    program.args.forEach(function(file) {
-      var source = readFile(file);
-      try_compile(source);
+    program.args.forEach(function(filename) {
+      var source = readFile(filename);
+      try_compile(source, filename);
     });
   } else {
     readStdin().then(function(source) {
-      try_compile(source);
+      if(program.filename === null) {
+        throw new Error("If using STDIN, please pass in a filename using --filename")
+      }
+      try_compile(source, program.filename);
     });
   }
 }
@@ -186,7 +200,10 @@ function readStdin() {
 
 function processStdin() {
   readStdin().then(function(source) {
-    compileSource(source);
+    if(program.filename === null) {
+      throw new Error("If using STDIN, please pass in a filename using --filename")
+    }
+    compileSource(source, program.filename);
   });
 }
 
@@ -199,69 +216,34 @@ function readFile(filename) {
   return fs.readFileSync(filename, "utf8");
 }
 
-function getCombinedData(contract, components) {
-  var data = {};
-  var junk = {"methods" : {}};
-  components.forEach(function(component) {
-    switch (component) {
-      case "abi":
-        data.abi = contract.interface;
-        break;
-      case "bin":
-        data.bin = contract.bytecode;
-        break;
-      case "devdoc":
-        data.devdoc = junk;
-        break;
-      case "userdoc":
-        data.userdoc = junk;
-        break;
-      case "interface":
-        data.interface = contract.solidity_interface;
-        break;
-      case "hashes":
-        data.hashes = contract.functionHashes;
-        break;
-      case "gas":
-        data.gas = contract.gasEstimates;
-        break;
+function wrapWithJson(source, filename) {
+  return {
+    language: 'Solidity',
+    sources: {
+      [filename]: {
+        content: source
+      }
+    },
+    settings: {
+      evmVersion: program.evmVersion,
+      optimizer: {
+        enabled: program.optimize,
+        runs: 200,
+      },
+      outputSelection: {
+        '*': {
+          '*': ['abi', 'evm.bytecode', 'evm.gasEstimates',
+            'evm.methodIdentifiers']
+        }
+      }
     }
-  });
-  return data;
+  }
 }
 
-function getComponents() {
-  // abi,bin,devdoc,interface,hashes,userdoc,gas
-  var combined = program.combinedJson || "";
-  var components = combined.split(/,/);
-  if (program.bin || program.all) {
-    components.push("bin");
-  }
-  if (program.abi || program.all) {
-    components.push("abi");
-  }
-  if (program.interface || program.all) {
-    components.push("interface");
-  }
-  if (program.gas || program.all) {
-    components.push("gas");
-  }
-  if (program.devdoc || program.all) {
-    components.push("devdoc");
-  }
-  if (program.userdoc || program.all) {
-    components.push("userdoc");
-  }
-  if (program.hashes || program.all) {
-    components.push("hashes");
-  }
-  return _.uniq(components);
-}
-
-function compileSource(source) {
+function compileSource(source, filename) {
   var solc = require("solc");
-  var optimize = (program.optimize === true ? 1 : 0);
-  var output = solc.compile(source, optimize);
+  var jsonStructure = wrapWithJson(source, filename);
+  var output = JSON.parse(solc.compile(JSON.stringify(jsonStructure)));
 
   if (output.errors) {
     if (!program.outputDir && background !== true) {
@@ -270,14 +252,9 @@ function compileSource(source) {
     return output;
   }
 
-  var allContractData = {};
 
   Object.keys(output.contracts).forEach(function(contractName) {
     var contract = output.contracts[contractName];
-    // console.log(contract);
-
-    // gather for stdout
-    allContractData[contractName] = getCombinedData(contract, getComponents());
 
     // write to files
     if (!program.outputDir) {
@@ -308,17 +285,16 @@ function compileSource(source) {
     }
 
     if (program.combinedJson) {
-      var data = getCombinedData(contract, program.combinedJson.split(/,/));
-      fs.writeFileSync(baseFilename + ".json", JSON.stringify(data));
+      fs.writeFileSync(baseFilename + ".json", JSON.stringify(output));
     }
 
   });
 
   if (!program.outputDir && background !== true) {
-    process.stdout.write(JSON.stringify(allContractData));
+    process.stdout.write(JSON.stringify(output));
   }
 
-  return allContractData;
+  return output;
 }
 
 main();
