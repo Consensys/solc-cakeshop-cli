@@ -67,7 +67,7 @@ function runServer() {
     Object.assign(program, {
       filename: req.query.filename,
       evmVersion: req.query.evmVersion,
-      optimize: !!req.query.optimize,
+      optimize: req.query.optimize === 'true',
     }
   );
     res.send(JSON.stringify(compileSource(req.body, req.query.filename)));

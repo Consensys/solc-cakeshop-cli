@@ -28,7 +28,7 @@
     "body-parser": "^1.19.0",
     "commander": "2.9.0",
     "express": "^4.16.4",
-    "solc": "^0.5.7",
+    "solc": "0.5.12",
     "underscore": "1.8.3"
   }
 }
