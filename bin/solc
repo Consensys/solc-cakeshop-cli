@@ -6,6 +6,11 @@ var fs = require("fs"),
     _ = require("underscore"),
     program = require("commander"),
     Promise = require("bluebird"),
+    solc = require("solc"),
+    promisify = require('util').promisify,
+    loadRemoteVersion = promisify(solc.loadRemoteVersion).bind(solc),
+    DEFAULT_SOLC_VERSION = 'v0.6.12+commit.27d51765',
+    remoteVersions = {},
     background = false;
 
 
@@ -28,6 +33,7 @@ function processArgs() {
     .option("--optimize", "Enable bytecode optimizer.")
     .option("--add-std", "Add standard contracts (currently ignored)")
     .option("--evm-version [version]", "evm version to use (byzantium, constantinople, petersburg, etc)")
+    .option("--sol-version [version]", "solidity compiler version to use", 'latest')
 
     .option("--spawn-ipc", "Spawn IPC server daemon")
     .option("--stop-ipc", "Stop the IPC server daemon")
@@ -67,10 +73,18 @@ function runServer() {
     Object.assign(program, {
       filename: req.query.filename,
       evmVersion: req.query.evmVersion,
+      solVersion: decodeURIComponent(req.query.version),
       optimize: req.query.optimize === 'true',
     }
   );
-    res.send(JSON.stringify(compileSource(req.body, req.query.filename)));
+    compileSource(req.body, req.query.filename)
+      .then((output) => {
+        let response = JSON.stringify(output)
+        res.send(response);
+      })
+      .catch((e) => {
+        console.error('error here', e)
+      })
   });
 
   app.post('/shutdown', function(req, res) {
@@ -90,7 +104,7 @@ function ipcReq(path, cb) {
 
 function compileIpc(source, filename) {
   return new Promise(function(resolve, reject) {
-    var req = ipcReq("/compile?filename=" + filename + "&optimize=" + !!program.optimize + "&evmVersion=" + program.evmVersion,
+    var req = ipcReq("/compile?filename=" + filename + "&optimize=" + !!program.optimize + "&evmVersion=" + program.evmVersion + "&version=" + encodeURIComponent(program.solVersion),
       function(res) {
         var buff = "";
         res.on("data", function(chunk) { buff += chunk; });
@@ -111,7 +125,7 @@ function stopServer() {
   ipcReq("/shutdown").on("error", function() { /* ignore errors */ }).end();
 }
 
-function main() {
+async function main() {
   processArgs();
   validateArgs();
 
@@ -131,9 +145,9 @@ function main() {
   if (!program.args || program.args.length === 0) {
     processStdin();
   } else {
-    program.args.forEach(function(filename) {
-      compileSource(readFile(filename), filename);
-    });
+    for (const filename of program.args) {
+      await compileSource(readFile(filename), filename);
+    }
   }
 }
 
@@ -233,25 +247,34 @@ function wrapWithJson(source, filename) {
       outputSelection: {
         '*': {
           '*': ['abi', 'evm.bytecode', 'evm.gasEstimates',
-            'evm.methodIdentifiers']
+            'evm.methodIdentifiers', 'storageLayout']
         }
       }
     }
   }
 }
 
-function compileSource(source, filename) {
-  var solc = require("solc");
-  var jsonStructure = wrapWithJson(source, filename);
-  var output = JSON.parse(solc.compile(JSON.stringify(jsonStructure)));
+async function getRemoteCompiler() {
+  const solVersion = (!program.solVersion || program.solVersion === 'latest') ? DEFAULT_SOLC_VERSION : program.solVersion
+  if(!remoteVersions.hasOwnProperty(solVersion)) {
+
+    remoteVersions[solVersion] = await loadRemoteVersion(solVersion)
+  }
+  return remoteVersions[solVersion]
+}
+
+async function compileSource(source, filename) {
+  const jsonStructure = wrapWithJson(source, filename);
+  let output
+  const remoteSolc = await getRemoteCompiler()
+  output = JSON.parse(remoteSolc.compile(JSON.stringify(jsonStructure)))
 
   if (output.errors) {
     if (!program.outputDir && background !== true) {
-      process.stdout.write(JSON.stringify(output));
+      process.stdout.write(JSON.stringify(output))
     }
-    return output;
+    return output
   }
-
 
   Object.keys(output.contracts).forEach(function(contractName) {
     var contract = output.contracts[contractName];
@@ -269,7 +292,7 @@ function compileSource(source, filename) {
       fs.writeFileSync(baseFilename + ".abi", contract.interface);
     }
     if (program.interface || program.all) {
-      fs.writeFileSync(baseFilename + "_inteface.sol", contract.solidity_interface);
+      fs.writeFileSync(baseFilename + "_interface.sol", contract.solidity_interface);
     }
     if (program.gas || program.all) {
       fs.writeFileSync(baseFilename + ".gas", JSON.stringify(contract.gasEstimates));
