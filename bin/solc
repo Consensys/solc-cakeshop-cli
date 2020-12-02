@@ -265,10 +265,8 @@ async function getRemoteCompiler() {
 
 async function compileSource(source, filename) {
   const jsonStructure = wrapWithJson(source, filename);
-  let output
   const remoteSolc = await getRemoteCompiler()
-  output = JSON.parse(remoteSolc.compile(JSON.stringify(jsonStructure)))
-
+  const output = JSON.parse(remoteSolc.compile(JSON.stringify(jsonStructure)))
   if (output.errors) {
     if (!program.outputDir && background !== true) {
       process.stdout.write(JSON.stringify(output))
