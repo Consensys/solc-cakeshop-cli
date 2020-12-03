@@ -1,6 +1,6 @@
 {
   "name": "solc-cakeshop-cli",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Solidity compiler CLI tool",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -28,7 +28,7 @@
     "body-parser": "^1.19.0",
     "commander": "2.9.0",
     "express": "^4.16.4",
-    "solc": "0.5.12",
+    "solc": "^0.7.0",
     "underscore": "1.8.3"
   }
 }
