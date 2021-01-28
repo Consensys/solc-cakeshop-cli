@@ -9,7 +9,7 @@ var fs = require("fs"),
     solc = require("solc"),
     promisify = require('util').promisify,
     loadRemoteVersion = promisify(solc.loadRemoteVersion).bind(solc),
-    DEFAULT_SOLC_VERSION = 'v0.6.12+commit.27d51765',
+    DEFAULT_SOLC_VERSION = 'v0.8.1+commit.df193b15',
     remoteVersions = {},
     background = false;
 
@@ -20,7 +20,6 @@ function processArgs() {
     .description("Compiles the given Solidity input files (or the standard input if none given) and\n  outputs the components specified in the options at standard output or in files in\n  the output directory, if specified.\n\n  The options currently supported by solc-cli are:")
     .option("-V, --version", "output the version number")
     .on("version", function() {
-      var solc = require("solc");
       console.log("solc, the solidity compiler commandline interface (solc-cli js wrapper for Node.js)");
       console.log("Version: " + solc.version());
       process.exit(0);
@@ -83,7 +82,7 @@ function runServer() {
         res.send(response);
       })
       .catch((e) => {
-        console.error('error here', e)
+        console.error('error compiling', e)
       })
   });
 
@@ -246,8 +245,14 @@ function wrapWithJson(source, filename) {
       },
       outputSelection: {
         '*': {
-          '*': ['abi', 'evm.bytecode', 'evm.gasEstimates',
-            'evm.methodIdentifiers', 'storageLayout']
+          '*': ['abi',
+            'evm.bytecode.object',
+            'evm.bytecode.opcodes',
+            'evm.bytecode.sourceMap',
+            'evm.bytecode.linkReferences',
+            'evm.gasEstimates',
+            'evm.methodIdentifiers',
+            'storageLayout']
         }
       }
     }
@@ -255,7 +260,11 @@ function wrapWithJson(source, filename) {
 }
 
 async function getRemoteCompiler() {
-  const solVersion = (!program.solVersion || program.solVersion === 'latest') ? DEFAULT_SOLC_VERSION : program.solVersion
+  const solVersion = program.solVersion
+  if (!solVersion || solVersion === 'latest' || solVersion === DEFAULT_SOLC_VERSION) {
+    return solc
+  }
+
   if(!remoteVersions.hasOwnProperty(solVersion)) {
 
     remoteVersions[solVersion] = await loadRemoteVersion(solVersion)
